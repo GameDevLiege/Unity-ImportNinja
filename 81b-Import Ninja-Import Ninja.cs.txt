@@ -1,49 +1,84 @@
-﻿using UnityEngine;
-using UnityEditor;
-using System;
+﻿using System.Collections.Generic;
 using System.IO;
-using System.Diagnostics;
+using UnityEditor;
+using UnityEngine;
 
 [InitializeOnLoad]
 public class Startup
 {
     static Startup()
     {
-        UnityEngine.Debug.Log("Your Personal Ninja");
+        Debug.Log("Your Personal Ninja");
 
-#if UNITY_EDITOR
-        DirectoryInfo projectDirectory = Directory.GetParent(Application.dataPath);
-        string projectPath = Application.dataPath + "/_" + projectDirectory.Name;
-#else
-        // TODO: WIP
+        DirectoryInfo   projectDirectory    = Directory.GetParent(Application.dataPath);
+        string          unityDirectory      = Directory.GetParent(EditorApplication.applicationPath).FullName;
+        string          importNinjaTemplate = unityDirectory + @"\Data\Resources\ScriptTemplates\ImportNinjaTemplate\";
 
-        DirectoryInfo projectDirectory = new DirectoryInfo(Application.dataPath);
-        string projectPath = Application.dataPath + "/_#SCRIPTNAME#";
-#endif
-
-        Directory.CreateDirectory(projectPath);
-
-        Directory.CreateDirectory(projectPath + "/Scripts");
-        Directory.CreateDirectory(projectPath + "/Graphics");
-        Directory.CreateDirectory(projectPath + "/Prefabs");
-        Directory.CreateDirectory(projectPath + "/Scenes");
-        Directory.CreateDirectory(projectPath + "/Builds");
-
-        // Don't put your game logic in here - it's removed when building the game
-        Directory.CreateDirectory(projectPath + "/Editor");
-
-        string scriptPath = new StackTrace(new StackFrame(true)).GetFrame(0).GetFileName();
-
-        // File.Delete(scriptPath);
-
-        string relativePath = new Uri(projectDirectory.FullName + "/" ).MakeRelativeUri(new Uri(scriptPath)).ToString();
-         
-        // Auto-reloads... Don't do this! (And auto-add .cs at the end of the filename :( )
-        // UnityEngine.Debug.Log(AssetDatabase.RenameAsset(relativePath, Path.GetFileName(relativePath) + ".disabled"));
-
-        // AssetDatabase.DeleteAsset(relativePath);
-        // AssetDatabase.MoveAssetToTrash(relativePath);
+        DirectoryCopy(
+            importNinjaTemplate,
+            Application.dataPath,
+            copySubDirs: true,
+            vars: 
+                new Dictionary<string, string>()
+                {
+                    {"PROJECTNAME", projectDirectory.Name}
+                }
+        );
 
         AssetDatabase.Refresh();
+    }
+
+    /// <summary>
+    ///     Source: https://docs.microsoft.com/en-us/dotnet/standard/io/how-to-copy-directories
+    ///     Modified by JeromeJ.
+    /// </summary>
+    /// <param name="vars"></param>
+
+    private static void DirectoryCopy(string sourceDirName, string destDirName, bool copySubDirs, Dictionary<string, string> vars = null)
+    {
+        if (vars == null) vars = new Dictionary<string, string>();
+
+        // Get the subdirectories for the specified directory.
+        DirectoryInfo dir = new DirectoryInfo(sourceDirName);
+
+        if (!dir.Exists)
+        {
+            throw new DirectoryNotFoundException(
+                "Source directory does not exist or could not be found: "
+                + sourceDirName);
+        }
+
+        DirectoryInfo[] dirs = dir.GetDirectories();
+        
+        // If the destination directory doesn't exist, create it.
+        Directory.CreateDirectory(destDirName);
+
+        // Get the files in the directory and copy them to the new location.
+        FileInfo[] files = dir.GetFiles();
+        foreach (FileInfo file in files)
+        {
+            string fileName = file.Name;
+
+            foreach (KeyValuePair<string, string> rr in vars)
+                fileName = fileName.Replace("#" + rr.Key + "#", rr.Value);
+
+            string temppath = Path.Combine(destDirName, fileName);
+            file.CopyTo(temppath, false);
+        }
+
+        // If copying subdirectories, copy them and their contents to new location.
+        if (copySubDirs)
+        {
+            foreach (DirectoryInfo subdir in dirs)
+            {
+                string subdirName = subdir.Name;
+
+                foreach (KeyValuePair<string, string> rr in vars)
+                    subdirName = subdirName.Replace("#" + rr.Key + "#", rr.Value);
+
+                string temppath = Path.Combine(destDirName, subdirName);
+                DirectoryCopy(subdir.FullName, temppath, copySubDirs, vars);
+            }
+        }
     }
 }
