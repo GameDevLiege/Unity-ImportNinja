@@ -1,0 +1,16 @@
+using UnityEngine;
+using UnityEditor;
+
+class #SCRIPTNAME# : EditorWindow
+{
+    [MenuItem("Window/#SCRIPTNAME#")]
+    public static void ShowWindow()
+    {
+        EditorWindow.GetWindow(typeof(#SCRIPTNAME#));
+    }
+
+    private void OnGUI()
+    {
+		// Insert your GUI code here
+    }
+}
