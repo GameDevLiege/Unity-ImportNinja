@@ -14,16 +14,25 @@ public class Startup
         string          unityDirectory      = Directory.GetParent(EditorApplication.applicationPath).FullName;
         string          importNinjaTemplate = unityDirectory + @"\Data\Resources\ScriptTemplates\ImportNinjaTemplate\";
 
-        DirectoryCopy(
-            importNinjaTemplate,
-            Application.dataPath,
-            copySubDirs: true,
-            vars: 
-                new Dictionary<string, string>()
-                {
-                    {"PROJECTNAME", projectDirectory.Name}
-                }
+        Dictionary<string, string> vars = new Dictionary<string, string>()
+        {
+            {"PROJECTNAME", projectDirectory.Name}
+        };
+
+        IEnumerable<EditablePathInfo> nodes = DirectoryCopy(
+            sourceDirName:  importNinjaTemplate,
+            destDirName:    Application.dataPath,
+            copySubDirs:    true
         );
+
+        foreach (EditablePathInfo node in nodes)
+        {
+            // TODO: Detect special names and store their locations
+            // (eg. Editor.ninjaTemplate.cs.txt and _ninjaHidingSpot)
+
+            foreach (KeyValuePair<string, string> rr in vars)
+                node.nodeName = node.nodeName.Replace("#" + rr.Key + "#", rr.Value);
+        }
 
         AssetDatabase.Refresh();
     }
@@ -34,10 +43,8 @@ public class Startup
     /// </summary>
     /// <param name="vars"></param>
 
-    private static void DirectoryCopy(string sourceDirName, string destDirName, bool copySubDirs, Dictionary<string, string> vars = null)
+    private static IEnumerable<EditablePathInfo> DirectoryCopy(string sourceDirName, string destDirName, bool copySubDirs)
     {
-        if (vars == null) vars = new Dictionary<string, string>();
-
         // Get the subdirectories for the specified directory.
         DirectoryInfo dir = new DirectoryInfo(sourceDirName);
 
@@ -57,13 +64,12 @@ public class Startup
         FileInfo[] files = dir.GetFiles();
         foreach (FileInfo file in files)
         {
-            string fileName = file.Name;
+            EditablePathInfo path = new EditablePathInfo(Path.Combine(destDirName, file.Name));
 
-            foreach (KeyValuePair<string, string> rr in vars)
-                fileName = fileName.Replace("#" + rr.Key + "#", rr.Value);
+            // Passed by reference
+            yield return path;
 
-            string temppath = Path.Combine(destDirName, fileName);
-            file.CopyTo(temppath, false);
+            file.CopyTo(path.fullPath, false);
         }
 
         // If copying subdirectories, copy them and their contents to new location.
@@ -71,14 +77,48 @@ public class Startup
         {
             foreach (DirectoryInfo subdir in dirs)
             {
-                string subdirName = subdir.Name;
+                EditablePathInfo path = new EditablePathInfo(Path.Combine(destDirName, subdir.Name));
 
-                foreach (KeyValuePair<string, string> rr in vars)
-                    subdirName = subdirName.Replace("#" + rr.Key + "#", rr.Value);
+                // Passed by reference
+                yield return path;
 
-                string temppath = Path.Combine(destDirName, subdirName);
-                DirectoryCopy(subdir.FullName, temppath, copySubDirs, vars);
+                // yield from
+                foreach(EditablePathInfo node in DirectoryCopy(subdir.FullName, path.fullPath, copySubDirs))
+                {
+                    // Passed by reference
+                    yield return node;
+                }
             }
         }
+    }
+}
+
+
+public class EditablePathInfo
+{
+    private string _nodeName;
+    private string _fullpath;
+
+    public string nodeName
+    {
+        get { return _nodeName; }
+        set {
+            _nodeName = value;
+            _fullpath = Path.Combine(Path.GetDirectoryName(_fullpath), _nodeName);
+        }
+    }
+
+    public string fullPath
+    {
+        get { return _fullpath; }
+        set {
+            _fullpath = value;
+            _nodeName = Path.GetFileName(_fullpath);
+        }
+    }
+
+    public EditablePathInfo(string _fullPath)
+    {
+        fullPath = _fullPath;
     }
 }
