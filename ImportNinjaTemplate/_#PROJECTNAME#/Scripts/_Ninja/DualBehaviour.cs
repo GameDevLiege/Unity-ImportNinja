@@ -29,22 +29,37 @@ public class DualBehaviour : MonoBehaviour
 
     #region Class Methods
 
-	[ContextMenu("Generate Editor for this script")]
-	private void _GenerateEditor()
+
+    [ContextMenu("Generate Editor for this script")]
+    private void GenerateEditor_instance()
+    {
+        _GenerateEditor(this.GetType().Name);
+    }
+
+    [MenuItem("Assets/Generate Editor for this script", true)]
+    private static bool GenerateEditor_validation()
+    {
+        // Will only show up this menu if the asset being clicked on is a script
+
+        return Selection.activeObject is MonoScript;
+    }
+
+    [MenuItem("Assets/Generate Editor for this script")]
+    private static void GenerateEditor_static()
+    {
+        _GenerateEditor(Selection.activeObject.name);
+    }
+
+    private static void _GenerateEditor(string _name)
 	{
-        // Didn't find a way to locate children class location using StackTrace, only DualBehaviours'
-        // Could theoretically find it using its classname and search for its name in the Asset folder
-
-        string name = this.GetType().Name;
-
         string editorTemplateGUID = AssetDatabase.FindAssets(Path.GetFileNameWithoutExtension(ImportNinja.editorTemplate)).FirstOrDefault();
 
         string editorTemplatePath = AssetDatabase.GUIDToAssetPath(editorTemplateGUID);
         string editorTemplateFullPath = new DirectoryInfo(editorTemplatePath).FullName;
 
         File.WriteAllText(
-            editorTemplateFullPath.Replace(ImportNinja.editorTemplate, name + "Editor.cs"),
-            File.ReadAllText(editorTemplateFullPath).Replace("#CLASSNAME#", name)
+            editorTemplateFullPath.Replace(ImportNinja.editorTemplate, _name + "Editor.cs"),
+            File.ReadAllText(editorTemplateFullPath).Replace("#CLASSNAME#", _name)
         );
 
         AssetDatabase.Refresh();
