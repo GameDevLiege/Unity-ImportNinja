@@ -1,4 +1,5 @@
 ﻿using System.IO;
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
 
@@ -31,18 +32,20 @@ public class DualBehaviour : MonoBehaviour
 	[ContextMenu("Generate Editor for this script")]
 	private void _GenerateEditor()
 	{
-        DirectoryInfo projectDirectory = Directory.GetParent(Application.dataPath);
-        string projectPath = Application.dataPath + "/_" + projectDirectory.Name;
-
         // Didn't find a way to locate children class location using StackTrace, only DualBehaviours'
         // Could theoretically find it using its classname and search for its name in the Asset folder
 
         string name = this.GetType().Name;
 
-        Directory.CreateDirectory(projectPath);
-        Directory.CreateDirectory(projectPath + "/Editor");
+        string editorTemplateGUID = AssetDatabase.FindAssets(Path.GetFileNameWithoutExtension(ImportNinja.editorTemplate)).FirstOrDefault();
 
-        // TODO: Create the Editor file here
+        string editorTemplatePath = AssetDatabase.GUIDToAssetPath(editorTemplateGUID);
+        string editorTemplateFullPath = new DirectoryInfo(editorTemplatePath).FullName;
+
+        File.WriteAllText(
+            editorTemplateFullPath.Replace(ImportNinja.editorTemplate, name + "Editor.cs"),
+            File.ReadAllText(editorTemplateFullPath).Replace("#CLASSNAME#", name)
+        );
 
         AssetDatabase.Refresh();
     }

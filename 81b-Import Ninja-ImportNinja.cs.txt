@@ -1,39 +1,78 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEngine;
+using System.Linq;
+
+public class ImportNinjaData : ScriptableObject
+{
+    public DirectoryInfo projectDirectory;
+    public string unityDirectory;
+    public string importNinja_template;
+
+    public Dictionary<string, string> vars = new Dictionary<string, string>();
+}
 
 [InitializeOnLoad]
-public class Startup
+public class ImportNinja
 {
-    static Startup()
+    static private string _ninjaData = "_ninjaData";
+    static private string _editorTemplate = "Editor.ninjatemplate.cs.txt";
+
+    static public string ninjaData { get { return _ninjaData; } }
+    static public string editorTemplate { get { return _editorTemplate; } }
+
+    static private ImportNinjaData _data;
+    static public ImportNinjaData data
+    {
+        set { _data = value;}
+        get {
+
+            if (_data == null)
+            {
+                string ninjaPath = AssetDatabase.FindAssets(_ninjaData).FirstOrDefault();
+                _data = AssetDatabase.LoadAssetAtPath<ImportNinjaData>(AssetDatabase.GUIDToAssetPath(ninjaPath));
+            }
+
+            return _data;
+        }
+    }
+
+    static ImportNinja()
     {
         Debug.Log("Your Personal Ninja");
 
-        DirectoryInfo   projectDirectory    = Directory.GetParent(Application.dataPath);
-        string          unityDirectory      = Directory.GetParent(EditorApplication.applicationPath).FullName;
-        string          importNinjaTemplate = unityDirectory + @"\Data\Resources\ScriptTemplates\ImportNinjaTemplate\";
+        if (data != null)
+            return;
 
-        Dictionary<string, string> vars = new Dictionary<string, string>()
+        data = ScriptableObject.CreateInstance<ImportNinjaData>();
+
+        data.projectDirectory    = Directory.GetParent(Application.dataPath);
+        data.unityDirectory      = Directory.GetParent(EditorApplication.applicationPath).FullName;
+        data.importNinja_template = data.unityDirectory + @"\Data\Resources\ScriptTemplates\ImportNinjaTemplate\";
+
+        data.vars.Add("PROJECTNAME", data.projectDirectory.Name);
+
+        string from = data.importNinja_template;
+        string to = Application.dataPath;
+
+        foreach (EditablePathInfo node in DirectoryCopy(from, to, copySubDirs: true))
         {
-            {"PROJECTNAME", projectDirectory.Name}
-        };
-
-        IEnumerable<EditablePathInfo> nodes = DirectoryCopy(
-            sourceDirName:  importNinjaTemplate,
-            destDirName:    Application.dataPath,
-            copySubDirs:    true
-        );
-
-        foreach (EditablePathInfo node in nodes)
-        {
-            // TODO: Detect special names and store their locations
-            // (eg. Editor.ninjaTemplate.cs.txt and _ninjaHidingSpot)
-
-            foreach (KeyValuePair<string, string> rr in vars)
+            foreach (KeyValuePair<string, string> rr in data.vars)
                 node.nodeName = node.nodeName.Replace("#" + rr.Key + "#", rr.Value);
+
+            string nodeName = node.nodeName;
+
+            if (nodeName == ninjaData)
+            {
+                AssetDatabase.CreateAsset(data, node.relativePath + ".asset");
+
+                node.dontSave = true;
+            }
         }
 
+        AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
     }
 
@@ -49,11 +88,7 @@ public class Startup
         DirectoryInfo dir = new DirectoryInfo(sourceDirName);
 
         if (!dir.Exists)
-        {
-            throw new DirectoryNotFoundException(
-                "Source directory does not exist or could not be found: "
-                + sourceDirName);
-        }
+            throw new DirectoryNotFoundException("Source directory does not exist or could not be found: " + sourceDirName);
 
         DirectoryInfo[] dirs = dir.GetDirectories();
         
@@ -66,10 +101,12 @@ public class Startup
         {
             EditablePathInfo path = new EditablePathInfo(Path.Combine(destDirName, file.Name));
 
-            // Passed by reference
-            yield return path;
+            yield return path; // By reference
 
-            file.CopyTo(path.fullPath, false);
+            if (path.dontSave)
+                continue;
+
+            file.CopyTo(path.fullPath);
         }
 
         // If copying subdirectories, copy them and their contents to new location.
@@ -79,13 +116,14 @@ public class Startup
             {
                 EditablePathInfo path = new EditablePathInfo(Path.Combine(destDirName, subdir.Name));
 
-                // Passed by reference
-                yield return path;
+                yield return path; // By reference
 
-                // yield from
-                foreach(EditablePathInfo node in DirectoryCopy(subdir.FullName, path.fullPath, copySubDirs))
+                if (path.dontSave)
+                    continue;
+
+                foreach (EditablePathInfo node in DirectoryCopy(subdir.FullName, path.fullPath, copySubDirs))
                 {
-                    // Passed by reference
+                    // Can be modified as well before execution resumes
                     yield return node;
                 }
             }
@@ -93,28 +131,22 @@ public class Startup
     }
 }
 
-
 public class EditablePathInfo
 {
-    private string _nodeName;
-    private string _fullpath;
+    public bool dontSave = false;
+    public string fullPath;
 
     public string nodeName
     {
-        get { return _nodeName; }
+        get { return Path.GetFileName(fullPath); }
         set {
-            _nodeName = value;
-            _fullpath = Path.Combine(Path.GetDirectoryName(_fullpath), _nodeName);
+            fullPath = Path.Combine(Path.GetDirectoryName(fullPath), value);
         }
     }
 
-    public string fullPath
+    public string relativePath
     {
-        get { return _fullpath; }
-        set {
-            _fullpath = value;
-            _nodeName = Path.GetFileName(_fullpath);
-        }
+        get { return new Uri(Application.dataPath).MakeRelativeUri(new Uri(fullPath)).ToString(); }
     }
 
     public EditablePathInfo(string _fullPath)
