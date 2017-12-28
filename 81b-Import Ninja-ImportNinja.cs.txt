@@ -5,48 +5,52 @@ using UnityEditor;
 using UnityEngine;
 using System.Linq;
 
-public class ImportNinjaData : ScriptableObject
+public class ImportNinja : ScriptableObject
 {
     public DirectoryInfo projectDirectory;
     public string unityDirectory;
     public string importNinja_template;
 
     public Dictionary<string, string> vars = new Dictionary<string, string>();
-}
 
-[InitializeOnLoad]
-public class ImportNinja
-{
+    // STATIC //
+
     static private string _ninjaData = "_ninjaData";
     static private string _editorTemplate = "Editor.ninjatemplate.cs.txt";
 
     static public string ninjaData { get { return _ninjaData; } }
     static public string editorTemplate { get { return _editorTemplate; } }
 
-    static private ImportNinjaData _data;
-    static public ImportNinjaData data
+    static private ImportNinja _data;
+    static public ImportNinja data
     {
-        set { _data = value;}
-        get {
+        set { _data = value; }
+        get
+        {
 
             if (_data == null)
             {
                 string ninjaPath = AssetDatabase.FindAssets(_ninjaData).FirstOrDefault();
-                _data = AssetDatabase.LoadAssetAtPath<ImportNinjaData>(AssetDatabase.GUIDToAssetPath(ninjaPath));
+                _data = AssetDatabase.LoadAssetAtPath<ImportNinja>(AssetDatabase.GUIDToAssetPath(ninjaPath));
             }
 
             return _data;
         }
     }
+}
 
-    static ImportNinja()
+[InitializeOnLoad]
+public class ImportNinjaInitializer
+{
+    static ImportNinjaInitializer()
     {
         Debug.Log("Your Personal Ninja");
 
-        if (data != null)
+        if (ImportNinja.data != null)
             return;
 
-        data = ScriptableObject.CreateInstance<ImportNinjaData>();
+        ImportNinja.data = ScriptableObject.CreateInstance<ImportNinja>();
+        ImportNinja data = ImportNinja.data;
 
         data.projectDirectory    = Directory.GetParent(Application.dataPath);
         data.unityDirectory      = Directory.GetParent(EditorApplication.applicationPath).FullName;
@@ -64,7 +68,7 @@ public class ImportNinja
 
             string nodeName = node.nodeName;
 
-            if (nodeName == ninjaData)
+            if (nodeName == ImportNinja.ninjaData)
             {
                 AssetDatabase.CreateAsset(data, node.relativePath + ".asset");
 
